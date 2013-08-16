@@ -1,6 +1,6 @@
 body {
   padding-top: 20px;
-  background-color: #bcc3db;
+  background-color: #bbc7d3;
 }
 
 /* Everything but the jumbotron gets side spacing for mobile-first views */
@@ -79,4 +79,17 @@ body {
     padding-left: 0;
     padding-right: 0;
   }
+}
+
+
+.starthqimg {
+	border: none;
+	width: 130px;
+	height: 26px;
+}
+
+.binaryageimg {
+	border: none;
+	width: 196px;
+	height: 46px;
 }
