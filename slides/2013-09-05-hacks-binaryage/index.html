@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+
+    <title>reveal.js - The HTML Presentation Framework</title>
+
+    <meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+    <meta name="author" content="Hakim El Hattab">
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <link rel="stylesheet" href="css/reveal.min.css">
+    <link rel="stylesheet" href="css/theme/solarized.css" id="theme">
+
+    <!-- For syntax highlighting -->
+    <link rel="stylesheet" href="lib/css/xcode.css">
+
+    <!-- If the query includes 'print-pdf', use the PDF print sheet -->
+    <script>
+      document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+    </script>
+
+    <!--[if lt IE 9]>
+    <script src="lib/js/html5shiv.js"></script>
+    <![endif]-->
+  </head>
+
+  <body>
+
+    <div class="reveal">
+
+      <!-- Any section element inside of this container is displayed as a slide -->
+      <div class="slides">
+
+<!-- ==================================================================================== -->
+<section>
+  <h1>Hacks in BinaryAge</h1>
+  <h3>for typing less and getting more</h3>
+  <p>
+    <small>by <a href="http://about.me/darwin">Antonin Hildebrand</a> / <a href="http://binaryage.com">BinaryAge</a></small>
+  </p>
+</section>
+
+<section>
+  <h2>What we do</h2>
+  <h3>TotalFinder, TotalSpaces and more</h3>
+  <ul>
+    <li>hacking Apple's software for fun and profit</li>
+    <li>developer tools</li>
+    <li>some other geeky stuff</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Today's topics</h2>
+  <ul>
+    <li>seamless STL</li>
+    <li>checked pointers</li>
+    <li>fake Objective-C directives</li>
+  </ul>
+  <br>
+  <br>
+  <p>
+  <small>note: all applies to the latest Objective-C++ (clang, libc++)</small>
+</p>
+</section>
+
+<section>
+  <section>
+    <h1>Seamless STL</h1>
+  </section>
+
+  <section>
+    <h2>What is wrong with NSArray?</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+NSMutableArray* a = [[NSMutableArray alloc] init];
+
+// insert scenario
+[a addObject:@1]; // lost C-type information
+
+// access scenario
+NSNumber* v = [a lastObject]; // really NSNumber?
+
+// remove scenario
+[a removeLastObject];
+  </code></pre>
+  <p>the container doesn't keep C-type information</p>
+  </section>
+
+  <section>
+    <h2>What is STL?</h2>
+    <p>Standard Template Library</p>
+    <p>generic data structures + generic algorithms</p>
+    <p><b>data structures</b>: vectors, lists, maps, hash maps, etc.</p>
+    <p><b>algorithms</b>: inserting, removing, sorting, balancing trees, etc.</p>
+    <p>depends heavily on C++ templates</p>
+  </section>
+
+  <section>
+    <h2>STL example</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+#import &lt;vector&gt;
+
+void main() {
+  std::vector&lt;int&gt; a;
+
+  a.push_back(3);
+  a.push_back(1);
+  a.push_back(2); // => 3, 1, 2
+
+  std::sort(a.begin(), a.end()); // => 1, 2, 3
+
+  for (auto v : a) { // new C++11 syntax
+    NSLog(@"%d", v);
+  }
+}
+    </code></pre>
+
+  </section>
+
+
+  <section>
+    <h2>STL and ObjC</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+#import &lt;vector&gt;
+
+void main() {
+  std::vector&lt;NSNumber*&gt; a;
+
+  a.push_back(@3);
+  a.push_back(@1);
+  a.push_back(@2); // => @3, @1, @2
+
+  auto predicate = ^(NSNumber* a, NSNumber* b) {
+    return [a integerValue] < [b integerValue];
+  };
+  std::sort(a.begin(), a.end(), predicate); // => @1, @2, @3
+
+  for (auto v : a) {
+    NSLog(@"%ld", (long)[v integerValue]);
+  }
+}
+  </code></pre>
+  </section>
+
+  <section>
+    <h2>STL and ObjC</h2>
+    <p>Good: STL works with Objective-C</p>
+    <p>Bad: STL knows nothing about Objective-C</p>
+    <br>
+    <p>Who will do retain/release?</p>
+  </section>
+
+  <section>
+    <h2>Wrong answer: a developer</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+std::vector&lt;NSNumber*&gt; a;
+NSNumber* v;
+
+// insert scenario
+v = [@1 retain]; // !!! responsibility of the developer to retain
+a.push_back(v);
+
+// remove scenario
+v = a.back();
+a.pop_back();
+[v release]; // !!! responsibility of the developer to release
+  </code></pre>
+  <p>a recipe for a disaster</p>
+  </section>
+
+  <section>
+    <h2>Better answer: a wrapper</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+typedef scoped_nsobject&lt;NSNumber&gt; ScopedNSNumber;
+std::vector&lt;ScopedNSNumber&gt; a;
+// !!! responsibility of the developer to not forget to use scoped_nsobject
+
+// insert scenario
+a.push_back(ScopedNSNumber(@1));
+
+// remove scenario
+a.pop_back();
+  </code></pre>
+  <p>looks better, a bit verbose</p>
+  <p>what about compound data structures?</p>
+  </section>
+
+  <section>
+    <h2>Best answer: the ARC</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+std::vector&lt;NSNumber*&gt; a;
+
+// insert scenario
+a.push_back(@1);
+
+// remove scenario
+a.pop_back();
+  </code></pre>
+  <p>ARC is like magic, but it works!</p>
+  </section>
+
+  <section>
+    <h2>Discussion</h2>
+    <ul>
+      <li>STL is a great flexible toolbox</li>
+      <li>STL under ARC works great for both ObjC and C++ types</li>
+      <li>clang is smart when optimizing templated code (-Ofast, -flto)</li>
+    </ul>
+  </section>
+</section>
+
+
+<section>
+  <section>
+    <h1>Checked pointers</h1>
+  </section>
+  <section>
+    <h2>The problem with untyped interfaces</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+// in some library
+@interface SomePoorIterface : NSObject
+- (id) controller; // what is the real type?
+@end
+    </code></pre>
+    <p>or let's revisit our previous example:</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+NSMutableArray* a = callingSomeForeignerToGiveMeAnArray();
+
+// access scenario
+NSNumber* v = [a lastObject];
+// is v really NSNumber or sub-class of NSNumber?
+return [v integerValue];
+    </code></pre>
+  </section>
+  <section>
+    <h2>The problem with hacking Finder</h2>
+    <p>do defensive programming because anything can break</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+TBrowserWindow* finderWindow = [finder getSomeWindow];
+// is finderWindow null?
+// is finderWindow really TBrowserWindow?
+// is finderWindow really subclass of NSWindow?
+[finderWindow doSomething];
+    </code></pre>
+    <p>I need to catch unexpected state early</p>
+  </section>
+  <section>
+    <h2>A traditional solution with DCHECKs</h2>
+    <p>DCHECK = debug mode check</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+NSMutableArray* a = callingSomeForeignerToGiveMeAnArray();
+
+// access scenario
+NSNumber* v = [a lastObject];
+DCHECK([v isKindOfClass:[NSNumber class]]);
+return [v integerValue];
+    </code></pre>
+  </section>
+  <section>
+    <h2>I want something like this</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+NSMutableArray* a = callingSomeForeignerToGiveMeAnArray();
+
+// access scenario
+NSNumberPtr v = [a lastObject];
+return [v integerValue];
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>IDEA: wrap our pointer in a C++ class</h2>
+    <p>and perform checks implicitly</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+class NSNumberPtr {
+public:
+  NSNumberPtr(NSNumber* p = NULL) : p_(p) {}
+  void operator =(const NSNumber* rs) { p_ = rs; _check(); }
+  operator NSNumber*() const { _check(); return p_; }
+
+protected:
+  void _check() const {
+    DCHECK(p_);
+    DCHECK([p_ isKindOfClass:[NSNumber class]]);
+  }
+
+  NSNumber* p_;
+};
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>Needs more work</h2>
+    <ul>
+      <li>more refined operators: !=, ==, =</li>
+      <li>templated version:</li>
+      <pre><code class="objectivec" data-trim contenteditable>
+#define NSNumberPtr checked_objc_ptr&lt;NSNumber*&gt;
+      </code></pre>
+      <li>in release mode NSNumberPtr is just an alias to NSNumber*</li>
+      <pre><code class="objectivec" data-trim contenteditable>
+#define NSNumberPtr NSNumber*
+      </code></pre>
+      <li>customizable checks:</li>
+      <pre><code class="objectivec" data-trim contenteditable>
+#define NSNumberPtrOrNil checked_objc_ptr&lt;NSNumber*, DONT_CHECK_NULLITY&gt;
+#define NSNumberClass checked_objc_ptr&lt;NSNumber*, CHECK_IS_CLASS&gt;
+      </code></pre>
+      <li>similar approach for non-objc pointers, pointers to structs, etc.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Conclusion</h2>
+    <ul>
+      <li>added code complexity in the DEBUG mode</li>
+      <li>not 100% emulation of C++ pointer semantics</li>
+    </ul>
+    <br><br>
+    <p class="fragment">but it is good enough,<br>it removed the need for most DCHECKs in my code<br>=> more readable code is a win</p>
+    <br>
+    <pre class="fragment"><code class="objectivec" data-trim contenteditable>
+TBrowserWindowPtr finderWindow = [finder getSomeWindow];
+[finderWindow doSomething];
+    </code></pre>
+  </section>
+
+</section>
+
+
+<section>
+  <section>
+    <h1>Fake ObjC directives</h1>
+  </section>
+  <section>
+    <h2>I like scoped Objective-C directives</h2>
+    <p>@autoreleasepool, @synchronized and similar</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+@autoreleasepool {
+  //
+  // code benefitting from a local autorelease pool.
+  //
+}
+    </code></pre>
+    <pre><code class="objectivec" data-trim contenteditable>
+@synchronized(object) {
+  //
+  // code protected by a lock
+  //
+}
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>Define own directives?</h2>
+    <p>Traditional code</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+void drawSomething() {
+  NSDisableScreenUpdates();
+  //
+  // some drawing code under disabled screen updates
+  //
+  NSEnableScreenUpdates();
+}
+    </code></pre>
+    <div class="fragment">
+    <p>This would be neat for disabling screen updates</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+void drawSomething() {
+  @disableScreenUpdates {
+    //
+    // some drawing code under disabled screen updates
+    //
+  }
+}
+    </code></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>IDEA: use C++ class as a scope guard</h2>
+
+    <pre><code class="objectivec" data-trim contenteditable>
+class ScopedNSDisableScreenUpdates {
+public:
+  ScopedNSDisableScreenUpdates() {
+    NSDisableScreenUpdates();
+  }
+  ~ScopedNSDisableScreenUpdates() {
+    NSEnableScreenUpdates();
+  }
+};
+    </code></pre>
+
+    <pre class="fragment"><code class="objectivec" data-trim contenteditable>
+void drawSomething() {
+  ScopedNSDisableScreenUpdates disabler;
+  //
+  // some drawing code under disabled screen updates
+  //
+}
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>An improvement</h2>
+    <p>but still not perfect</p>
+
+    <pre><code class="objectivec" data-trim contenteditable>
+void drawSomething() {
+  ScopedNSDisableScreenUpdates disabler; {
+    //
+    // some drawing code under disabled screen updates
+    //
+  }
+}
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>Use double-for-loop trick</h2>
+    <p>to inject our code into a scope provided by the user</p>
+
+    <pre><code class="objectivec" data-trim contenteditable>
+// --------------------------------------- our code
+for (bool _guard_ = true;
+     _guard_;
+     ({ if (_guard_) assert(0); _guard_ = false; }) )
+  for (ScopedNSDisableScreenUpdates _scopedNSDisableScreenUpdates_;
+       _guard_;
+       _guard_ = false)
+// --------------------------------------- user's code
+       {
+         // some drawing code under disabled screen updates
+       }
+    </code></pre>
+    <p><small>Credit: Jens Gustedt<br><a href="http://gustedt.wordpress.com/2010/08/14/scope-bound-resource-management-with-for-scopes">http://gustedt.wordpress.com/2010/08/14/scope-bound-resource-management-with-for-scopes</a></small></p>
+  </section>
+
+  <section>
+    <h2>Let's define the macro</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+#define DISABLE_SCREEN_UPDATES \
+for (bool _guard_ = true; \
+     _guard_; \
+     ({ if (_guard_) assert(0); _guard_ = false; }) ) \
+  for (ScopedNSDisableScreenUpdates _scopedNSDisableScreenUpdates_; \
+       _guard_; \
+       _guard_ = false)
+    </code></pre>
+    <p>Problem: '@' character cannot be included in C-macro's name</p>
+  </section>
+  <section>
+    <h2>Let's try eat @</h2>
+    <pre><code class="objectivec" data-trim contenteditable>
+#define disableScreenUpdates \
+try {} @finally {} \
+for (bool _guard_ = true; \
+     _guard_; \
+     ({ if (_guard_) assert(0); _guard_ = false; }) ) \
+  for (ScopedNSDisableScreenUpdates _scopedNSDisableScreenUpdates_; \
+       _guard_; \
+       _guard_ = false)
+    </code></pre>
+    <p>user code looks like we wanted:</p>
+    <pre><code class="objectivec" data-trim contenteditable>
+void drawSomething() {
+  @disableScreenUpdates {
+    //
+    // some drawing code under disabled screen updates
+    //
+  }
+}
+    </code></pre>
+  </section>
+</section>
+
+<section>
+  <h1>That's all</h1>
+  <p>Thanks for listening</p>
+  <br>
+  <br><br>
+  <h2>Questions?</h2>
+  <br><br>
+  <p>or email me at <a href="mailto:antonin@binaryage.com">antonin@binaryage.com</a></p>
+</section>
+<!-- =========================================================================================================== -->
+
+      </div>
+
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.min.js"></script>
+
+    <script>
+
+      // Full list of configuration options available here:
+      // https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+
+        theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+        transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+        // Optional libraries used to extend on reveal.js
+        dependencies: [
+          { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+          { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+          { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+          { src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+          { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+        ]
+      });
+
+    </script>
+
+  </body>
+</html>
