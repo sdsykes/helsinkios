@@ -94,3 +94,8 @@ body {
 	width: 196px;
 	height: 46px;
 }
+
+.companylink, .companylink:link, .companylink:visited {
+  text-decoration: underline;
+  color: #333333;
+}
