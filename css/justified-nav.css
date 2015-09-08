@@ -99,3 +99,8 @@ body {
   text-decoration: underline;
   color: #333333;
 }
+
+.meetuplogo {
+  margin-top: -15px;
+  border: 0;
+}
